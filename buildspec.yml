@@ -1,0 +1,35 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+
+  pre_build:
+    commands:
+      - echo "Installing requirements.txt..."
+      - python -m pip install -r requirements.txt -t abc
+  
+  build:
+    commands:
+      - echo "Packaging..."
+      - cd abc
+      - zip -r ../package_deployment_producer.zip .
+      - cd ..
+      - cp package_deployment_producer.zip package_deployment_filtered.zip
+      - cp package_deployment_producer.zip package_deployment_consumer.zip
+      - zip -g package_deployment_producer.zip lambda_function_producer.py
+      - zip -g package_deployment_filtered.zip lambda_function_filtering.py
+      - zip -g package_deployment_consumer.zip lambda_function_consumer.py
+      
+  post_build:
+    commands:
+      - echo "Uploading package in s3 bucket..."
+      - aws s3 package_deployment_producer.zip s3://store-lambda-code-cicd/
+      - aws s3 package_deployment_filtered.zip s3://store-lambda-code-cicd/
+      - aws s3 package_deployment_consumer.zip s3://store-lambda-code-cicd/
+      - echo "Updating Lambda function code..."
+      - aws lambda update-function-code --function-name ProduceAirbnbBookingData --s3-bucket store-lambda-code-cicd --s3-key package_deployment_producer.zip
+      - aws lambda update-function-code --function-name FilterAirbnbBookings --s3-bucket store-lambda-code-cicd --s3-key package_deployment_filtered.zip
+      - aws lambda update-function-code --function-name ProcessFilteredBookings --s3-bucket store-lambda-code-cicd --s3-key package_deployment_consumer.zip
+      - echo "Successfully Packaged lambda code !!!"
